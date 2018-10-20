@@ -1,0 +1,461 @@
+  /**
+     * 小程序对接接口
+     */
+    @Override
+    public JSONObject smallProgram(JSONObject param) throws Exception {
+        int code = Integer.parseInt(param.getString("code"));
+        JSONObject req = new JSONObject();
+        if(code == 805001){//绑定设备
+            logger.info("params:"+param);
+            try {
+                String merchant_id = param.getString("merchant_id");
+                System.out.println("-------------------------------------:"+merchant_id);
+               // int merchant_id =  Integer.parseInt(param.getString("merchant_id"));//商户id
+               // BigInteger merchant_ids  =  new BigInteger(param.getString("merchant_id"));
+                String device_id = param.getString("device_id");//设备id
+                if (device_id == null || merchant_id==null) {
+                    req.put("Mesg","请求参数有误");
+                    req.put("statusCode","500");
+                    return req;
+                }
+                List<Device> listDevice =  deviceService.getDeviceByMerchantId(merchant_id);//根据商户id查询deviceid
+                System.out.println(listDevice.size()+"              "+listDevice);
+                if(listDevice.size() != 0){
+                    req.put("Mesg","此商户已绑定设备,请解绑后重试");
+                    req.put("statusCode","500");
+                    return req;
+                }
+                Device devices = deviceService.selectbyDeviceId(device_id);
+                Device device = new Device();
+                if(devices!=null && devices.getMerchant_id().equals("")){
+                    device.setMerchant_id(merchant_id);
+                    device.setDevice_id(devices.getDevice_id());
+                    deviceService.updateMerchantIdByDeviceId(device,null);
+                    DeviceCommandList deviceCommandList = deviceCommandListService.getDeviceCommandList(2);
+                    JSONObject jsonObject = new JSONObject();
+                    jsonObject.put("shopName", "麓谷信息店");
+                    jsonObject.put("id", deviceCommandList.getId());
+                    ServiceData serviceData = deviceCommandService.deviceCommand(device_id, deviceCommandList.getCommand_key(), jsonObject.toJSONString());
+                    logger.info("serviceData:" + serviceData);
+                    req.put("Mesg","success");
+                    req.put("statusCode","200");
+                    return req;
+                }else if(devices!=null && !devices.getMerchant_id().equals("")) {
+                    req.put("Mesg", "设备已经绑定");
+                    req.put("statusCode", "500");
+                    return req;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                req.put("Mesg",e.getMessage());
+                req.put("statusCode","500");
+                return req;
+            }
+        }else if(code == 805002){//解除绑定
+            logger.info("params:"+param);
+            try {
+                String merchant_id = param.getString("merchant_id");//设备id -----> 改为 agindid(merchant_id)
+                if (merchant_id == null ) {
+                    req.put("Mesg","请求参数有误");
+                    req.put("statusCode","500");
+                    return req;
+                }
+                List<Device> listDevice =  deviceService.getDeviceByMerchantId(merchant_id);//根据商户id查询deviceid
+                if(listDevice.size() == 0){
+                    req.put("Mesg","商户未绑定设备");
+                    req.put("statusCode","500");
+                    return req;
+                }
+                String divceid = listDevice.get(0).getDevice_id();//获取deviceid
+                Device queryDevice =  deviceService.selectbyDeviceId(divceid);
+                if(queryDevice==null){
+                    req.put("Mesg","没有查询到该设备");
+                    req.put("statusCode","500");
+                    return req;
+                }else if(queryDevice.getMerchant_id()==null){
+                    req.put("Mesg","当前设备没有绑定,不能解绑");
+                    req.put("statusCode","500");
+                    return req;
+                }
+
+
+                Device device = new Device();
+                device.setMerchant_id("");
+                device.setDevice_id(divceid);
+                deviceService.updateMerchantIdByDeviceId(device,null);
+                req.put("Mesg","success");
+                req.put("statusCode","200");
+                return req;
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                req.put("Mesg",e.getMessage());
+                req.put("statusCode","500");
+                return req;
+            }
+
+        }else if(code == 805003){//设备查询
+            logger.info("params:"+param);
+            try {
+                String merchant_id =  param.getString("merchant_id");//商户id
+                if (merchant_id == null ) {
+                    req.put("Mesg","请求参数有误");
+                    req.put("statusCode","500");
+                    return req;
+                }
+                //通过商户得到设备列表
+                List<Device> device_list = deviceService.getDeviceByMerchantId(merchant_id);
+                if(device_list.size() == 0){
+                    req.put("Mesg","商户未绑定设备");
+                    req.put("statusCode","500");
+                    return req;
+                }
+                req.put("Mesg","success");
+                req.put("device_list",device_list);
+                req.put("statusCode","200");
+                return req;
+
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                req.put("Mesg",e.getMessage());
+                req.put("statusCode","500");
+                return req;
+            }
+
+
+
+        }else if(code == 805004){//推送金额
+            logger.info("params:"+param);
+            try {
+                String merchant_id = param.getString("merchant_id");//设备id -----> 改为 agindid(merchant_id)
+              //  String pustMoney  = param.getString("pustMoney");//金额
+                String Money = param.getString("pustMoney");
+                if (merchant_id == null || Money==null || Money.equals("")) {
+                    req.put("Mesg","请求参数有误");
+                    req.put("statusCode","500");
+                    return req;
+                }
+                double moneys = Double.parseDouble(param.getString("pustMoney"))*100;
+                DecimalFormat decimalFormat = new DecimalFormat("###################.###########");
+                String pustMoney = decimalFormat.format(moneys);
+                List<Device> listDevice =  deviceService.getDeviceByMerchantId(merchant_id);//根据商户id查询deviceid
+                if(listDevice.size() == 0){
+                    req.put("Mesg","商户未绑定设备,推送失败!");
+                    req.put("statusCode","500");
+                    return req;
+                }
+                String device_id = listDevice.get(0).getDevice_id();
+                logger.info("device_id:"+device_id);
+                //发送给客户端绑定成功
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.put("pushMoney", pustMoney);
+                DeviceCommandList deviceCommandList = deviceCommandListService.getDeviceCommandList(3);
+                jsonObject.put("id", deviceCommandList.getId());
+                logger.info("deviceCommandList:" + deviceCommandList);
+                String oderid = PayServiceImpl.getPosOrderNum();//设备随机订单号
+                jsonObject.put("equipment_order",oderid);
+                ServiceData serviceData = deviceCommandService.deviceCommand(device_id, deviceCommandList.getCommand_key(), jsonObject.toJSONString());
+                Order order = new Order();
+                order.setOriginal_money(pustMoney+"");//金额
+                order.setState(orderService.getOrderState(4).getId());//订单状态
+                order.setMerchant_id(merchant_id);//商户id
+                order.setCreate_time(new Date());
+                order.setUpdate_time(new Date());
+                order.setCash_id(oderid);//设备端订单id
+                order.setCurrency("CNY");
+                order.setGoodsName("");
+                order.setGoodsDesc("");
+                order.setTerminalType("IMEI");
+                order.setOrderIp("");
+                order.setTerminalId(device_id);//终端标识
+                orderService.addOrder(order);
+                req.put("Mesg","success");
+                req.put("statusCode","200");
+                req.put("equipment_order",oderid);
+                return req;
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                req.put("Mesg",e.getMessage());
+                req.put("statusCode","500");
+                return req;
+            }
+        }else if(code == 805005){//会员注册 返回faceid
+            logger.info("params:"+param);
+            Date DataStart = new Date();
+            DateFormat df2 = DateFormat.getDateTimeInstance();
+            logger.info("getDate--------------------------------getDatestart:" + df2.format(DataStart));
+            try {
+                String img = param.getString("img");//base64人脸图片字符串
+                String mobileno = param.getString("mobileno");//手机号
+                if (img == null || mobileno == null) {
+                    req.put("Mesg","请求参数有误");
+                    req.put("statusCode","500");
+                    return req;
+                }
+               Member members =  memberService.getMemberByPhoneNumbet(mobileno);
+                if(members == null) {
+                    Date imgStart = new Date();
+                    logger.info("img--------------------------------imgStart:" + df2.format(imgStart));
+                    AddResponse addResponse = faceService.addFace(img, "");
+                    Date imgStop = new Date();
+                    logger.info("img--------------------------------imgStop:" + df2.format(imgStop));
+                    Member member = new Member();
+                    member.setUser_id(0);
+                    member.setMerchant_id(0);
+                    member.setSalesman_id(0);
+                    member.setFace_id(addResponse.getFaceId());
+                    member.setPayment_method("{\"isAlipay\": 1,\"isWeChat\":1,\"isBank\":1}");
+                    member.setReg_time(new Date());
+                    member.setFace_image(img);
+                    member.setPhone_number(mobileno);
+                    memberService.addMember(member);
+                    req.put("Mesg", "success");
+                    req.put("statusCode", "200");
+                    req.put("faceId", addResponse.getFaceId());
+                    return req;
+                }else{
+                    req.put("Mesg","手机号已注册");
+                    req.put("faceid",members.getFace_id());
+                    req.put("statusCode","500");
+                    return req;
+                 }
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                req.put("Mesg",e.getMessage());
+                req.put("statusCode","500");
+                return req;
+            }
+
+        }else if(code == 805006){
+            logger.info("params:"+param);
+            try {
+                JSONObject result = new JSONObject();
+                String cash_id = param.getString("equipment_order");
+                if(cash_id == null){
+                    result.put("Mesg","请求参数有误");
+                    result.put("statusCode","500");
+                    return result;
+                }
+                Order ordes = new Order();
+                ordes.setCash_id(cash_id);
+                Order order = orderService.getOrderStatus(ordes);
+                if(order !=null){
+                    result.put("Mesg","success");
+                    result.put("statusCode","200");
+                    result.put("orderStatus",order.getState());
+                    result.put("orderNo",order.getOrderIp());
+                    return result;
+                }else{
+                    result.put("Mesg","订单不存在");
+                    result.put("statusCode","500");
+                    return result;
+             }
+            } catch (Exception e) {
+                e.printStackTrace();
+                req.put("Mesg",e.getMessage());
+                req.put("statusCode","500");
+                return req;
+            }
+        }else if(code == 805007){
+            try{
+                JSONObject result = new JSONObject();
+                String cash_id = param.getString("equipment_order");
+                String merchant_id = param.getString("merchant_id");
+                if(cash_id == null || merchant_id==null){
+                    result.put("Mesg","请求参数有误");
+                    result.put("statusCode","500");
+                    return result;
+                }
+                List<Device> listDevice =  deviceService.getDeviceByMerchantId(merchant_id);//根据商户id查询deviceid
+                if(listDevice.size() == 0){
+                    req.put("Mesg","商户未绑定设备!");
+                    req.put("statusCode","500");
+                    return req;
+                }
+                Order ordes = new Order();
+                ordes.setCash_id(cash_id);
+                Order order = orderService.getOrderStatus(ordes);
+                if(order == null){
+                    result.put("Mesg","订单不存在");
+                    result.put("statusCode","500");
+                    return result;
+                }
+                order.setTerminalId(listDevice.get(0).getDevice_id());
+                order.setState(3);
+                orderService.updateOrder(order);
+                DeviceCommandList deviceCommandList = deviceCommandListService.getDeviceCommandList(4);
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.put("id", deviceCommandList.getId());
+                logger.info("deviceCommandList:" + deviceCommandList);
+                ServiceData serviceData = deviceCommandService.deviceCommand(listDevice.get(0).getDevice_id(), deviceCommandList.getCommand_key(), jsonObject.toJSONString());
+                result.put("Mesg","success");
+                result.put("statusCode","200");
+                result.put("orderStatus",order.getState());
+                return result;
+        } catch (Exception e) {
+            e.printStackTrace();
+            req.put("Mesg",e.getMessage());
+            req.put("statusCode","500");
+            return req;
+        }
+        } else {
+            req.put("Mesg", "此系统参数不存在");
+            req.put("statusCode", "9999");
+        }
+        return req;
+    }
+    /*
+        通过faceid 获取用户信息
+     */
+    @Override
+    public JSONObject requestUserInfo(JSONObject params) throws Exception {
+        EncryptManager_RS encryptManager = new EncryptManager_RS();
+        encryptManager.initEncrypt();
+        String seq = dateFormat.format(new Date());
+        String temesamp =  dateFormat.format(new Date());
+        String mobkey = encryptManager.getMobKey();
+        Map<String, String> resMap = new HashMap<String, String>();
+        resMap.put("funcode", "0065");
+        resMap.put("faceid", encryptManager.getEncryptDES(params.getString("faceid")));
+        resMap.put("mobkey",  mobkey);//密钥
+        resMap.put("seq", seq);
+        resMap.put("timesamp", temesamp);//时间戳
+        resMap.put("sign",  MD5.MD5Encode(seq+temesamp));
+        String reqStr = "reqJson="+JsonUtil.map2Json(resMap);
+        HttpResponse resp = HttpClientService.doHttp(Merchant_Entry_URL, "POST",
+                "UTF-8", reqStr, "600000");
+
+        logger.info("resp.getBody():"+resp.getBody());
+        JSONObject jsonMap =JSON.parseObject(resp.getBody());
+
+        return jsonMap;
+    }
+
+    @Override
+    public JSONObject queryQuick(JSONObject params) throws Exception {
+        EncryptManager_RS encryptManager = new EncryptManager_RS();
+        encryptManager.initEncrypt();
+        String seq = dateFormat.format(new Date());
+        String temesamp =  dateFormat.format(new Date());
+        String mobkey = encryptManager.getMobKey();
+        Map<String, String> resMap = new HashMap<String, String>();
+        resMap.put("funcode", "0066");
+        resMap.put("agentid",params.getString("agentid"));
+        resMap.put("xx_no",params.getString("xx_no"));//银行卡号   params.getString("xx_no")
+
+        resMap.put("mobkey",  mobkey);//密钥
+        resMap.put("timesamp", temesamp);//时间戳
+        resMap.put("sign",  MD5.MD5Encode(seq+temesamp));
+        String reqStr = "reqJson="+JsonUtil.map2Json(resMap);
+        HttpResponse resp = HttpClientService.doHttp(Merchant_Entry_URL, "POST",
+                "UTF-8", reqStr, "600000");
+
+        logger.info("resp.getBody():"+resp.getBody());
+        JSONObject jsonMap =JSON.parseObject(resp.getBody());
+
+        return jsonMap;
+    }
+
+    @Override
+    public JSONObject queryOrderStatus(JSONObject params) throws Exception {
+        return null;
+    }
+
+//    @Override
+//    public JSONObject queryOrderStatus(JSONObject params) throws Exception {
+//        logger.info("params:"+params);
+//        String equipment_order = params.getString("equipment_order");
+//        Order order = orderService.getOrderStatus(equipment_order);
+//        JSONObject result = new JSONObject();
+//        if(order !=null){
+//            result.put("Mesg","success");
+//            result.put("statusCode","200");
+//            result.put("status",order.getState());
+//            return result;
+//        }else{
+//            result.put("Mesg","订单不存在");
+//            result.put("statusCode","500");
+//            return result;
+//        }
+//    }
+
+    @Override
+    public JSONObject testRegister(JSONObject params) throws Exception {
+
+        //注册第一步
+        EncryptManager_RS encryptManager = new EncryptManager_RS();
+        encryptManager.initEncrypt();
+        String seq = dateFormat.format(new Date());
+        String temesamp =  dateFormat.format(new Date());
+        String mobkey = encryptManager.getMobKey();
+//        Map<String, String> resMap = new HashMap<String, String>();
+//        resMap.put("funcode", "0060");
+//        resMap.put("fagentid","7080007");
+//        resMap.put("vernum", "826783");//验证码 params.getString("vernum")
+//        resMap.put("randnum","389");//随机码 params.getString("randnum")
+//        resMap.put("mobileno", encryptManager.getEncryptDES("17665231204"));
+//
+//        resMap.put("mobkey",  mobkey);//密钥
+//        resMap.put("seq", seq);
+//        resMap.put("timesamp", temesamp);//时间戳
+//        resMap.put("sign",  MD5.MD5Encode(seq+temesamp));
+//        String reqStr = "reqJson="+JsonUtil.map2Json(resMap);
+//        HttpResponse resp = HttpClientService.doHttp(Merchant_Entry_URL, "POST",
+//                "UTF-8", reqStr, "600000");
+//
+//        logger.info("resp.getBody():"+resp.getBody());
+//        JSONObject jsonMap =JSON.parseObject(resp.getBody());
+
+//        //注册第二步
+//         seq = dateFormat.format(new Date());
+//         temesamp =  dateFormat.format(new Date());
+//         mobkey = encryptManager.getMobKey();
+//        Map<String, String> resMap2 = new HashMap<String, String>();
+//        resMap2 = new HashMap<String, String>();
+//        resMap2.put("funcode", "0061");
+//        resMap2.put("mobileno", encryptManager.getEncryptDES("17665231204"));
+//        resMap2.put("faceid", "495528016580734976");
+//
+//
+//        resMap2.put("mobkey",  mobkey);//密钥
+//        resMap2.put("seq", seq);
+//        resMap2.put("timesamp", temesamp);//时间戳
+//        resMap2.put("sign",  MD5.MD5Encode(seq+temesamp));
+//        String reqStr2 = "reqJson="+JsonUtil.map2Json(resMap2);
+//        HttpResponse resp2 = HttpClientService.doHttp(Merchant_Entry_URL, "POST",
+//                "UTF-8", reqStr2, "600000");
+//
+//        logger.info("resp2.getBody():"+resp2.getBody());
+//        JSONObject jsonMap =JSON.parseObject(resp2.getBody());
+//
+//
+//
+//        //注册第三步
+        seq = dateFormat.format(new Date());
+        temesamp =  dateFormat.format(new Date());
+        mobkey = encryptManager.getMobKey();
+        Map<String, String> resMap3 = new HashMap<String, String>();
+        resMap3 = new HashMap<String, String>();
+        resMap3.put("funcode", "0062");
+        resMap3.put("mobileno", encryptManager.getEncryptDES("17665231204"));
+        resMap3.put("paypwd", encryptManager.getEncryptDES("123456"));
+        resMap3.put("openid",encryptManager.getEncryptDES("oTuQu5X6JMwroR-KaLFfo3BgdpTY"));
+
+
+        resMap3.put("mobkey",  mobkey);//密钥
+        resMap3.put("seq", seq);
+        resMap3.put("timesamp", temesamp);//时间戳
+        resMap3.put("sign",  MD5.MD5Encode(seq+temesamp));
+        String reqStr3 = "reqJson="+JsonUtil.map2Json(resMap3);
+        HttpResponse resp3 = HttpClientService.doHttp(Merchant_Entry_URL, "POST",
+                "UTF-8", reqStr3, "600000");
+
+        logger.info("resp3.getBody():"+resp3.getBody());
+        JSONObject jsonMap =JSON.parseObject(resp3.getBody());
+
+
+        return jsonMap;
+    }
